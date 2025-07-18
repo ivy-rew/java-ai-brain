@@ -16,11 +16,17 @@ import org.junit.jupiter.api.Test;
 import com.axonivy.connector.langchain.AiBrain;
 import com.axonivy.connector.langchain.schema.OpenAiSchemaModel;
 import com.axonivy.connector.langchain.schema.SchemaLoader;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import ch.ivyteam.ivy.environment.IvyTest;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.internal.Json;
 import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.request.ChatRequest.Builder;
+import dev.langchain4j.model.chat.request.ResponseFormat;
+import dev.langchain4j.model.chat.request.ResponseFormatType;
+import dev.langchain4j.model.chat.request.json.JsonNativeSchema;
 import dev.langchain4j.model.openai.OpenAiChatModelName;
 import dev.langchain4j.model.openai.internal.chat.JsonSchema;
 
@@ -117,7 +123,7 @@ public class ProcessSchemaGenTest {
         .build();
 
     var lc4jSchema = processSchema("proc-inline-full.json");
-    var writeMailProcess = processGeneration("write a soap process, that returns product names of our ERP database");
+    var writeMailProcess = processGeneration("write a soap process, that returns product names of our ERP database").build();
     var ai = new OpenAiSchemaModel(model);
     var generatedProcess = ai.chat(writeMailProcess, lc4jSchema);
 
@@ -137,6 +143,7 @@ public class ProcessSchemaGenTest {
     var lc4jSchema = processSchema("simple.json");
     var writeMailProcess = processGeneration();
     var ai = new OpenAiSchemaModel(model);
+
     var generatedProcess = ai.chat(writeMailProcess, lc4jSchema);
 
     System.out.println(generatedProcess.toPrettyString());
@@ -165,17 +172,40 @@ public class ProcessSchemaGenTest {
     var model = new AiBrain().buildModel()
         .supportedCapabilities(RESPONSE_FORMAT_JSON_SCHEMA)
         .modelName(OpenAiChatModelName.GPT_4_1_MINI)
-        .strictJsonSchema(true)
+        .strictJsonSchema(false)
         .logRequests(true)
         .logResponses(true)
         .build();
 
     var lc4jSchema = processSchema("proc-inline-full.json");
-    var writeMailProcess = processGeneration("write a soap process, that returns product names of our ERP database");
+    var writeMailProcess = processGeneration("write a soap process, that returns product names of our ERP database")
+        .build();
     var ai = new OpenAiSchemaModel(model);
     var generatedProcess = ai.chat(writeMailProcess, lc4jSchema);
 
     System.out.println(generatedProcess.toPrettyString());
+  }
+
+  @Test
+  void askOpenAi_native120api_gpt41mini_inlineFull() {
+    var model = new AiBrain().buildModel()
+        .supportedCapabilities(RESPONSE_FORMAT_JSON_SCHEMA)
+        .modelName(OpenAiChatModelName.GPT_4_1_MINI)
+        .strictJsonSchema(false)
+        .logRequests(true)
+        .logResponses(true)
+        .build();
+
+    var format = nativeResponsePR("proc-inline-full.json");
+    var writeMailProcess = processGeneration("write a soap process, that returns product names of our ERP database")
+        .responseFormat(format)
+        .build();
+
+    var out = model.chat(writeMailProcess);
+    String rawJson = out.aiMessage().text();
+    var json = Json.fromJson(rawJson, JsonNode.class);
+
+    System.out.println(json.toPrettyString());
   }
 
   @Test
@@ -198,17 +228,34 @@ public class ProcessSchemaGenTest {
   }
 
   private ChatRequest processGeneration() {
+    return processGenerationBuilder().build();
+  }
+
+  private Builder processGenerationBuilder() {
     return processGeneration("add an email element, telling rolf@axonivy.com that we got the lead!");
   }
 
-  private ChatRequest processGeneration(String msg) {
+  private Builder processGeneration(String msg) {
     var processHints = new SystemMessage("""
       omit as many defaults as possible, but at any rate produce the required values.
       Generate the 'data' as java qualified name.
       For element ID's create unique instances, starting from f1.
       Draw elements as graph.""");
+
     return ChatRequest.builder()
-        .messages(processHints, new UserMessage(msg))
+        .messages(processHints, new UserMessage(msg));
+  }
+
+  private ResponseFormat nativeResponsePR(String resource) {
+    var jsonNode = SchemaLoader.readSchema(resource);
+    JsonNativeSchema nativeSchema = new JsonNativeSchema.Builder().schema(jsonNode).build();
+    var jsonSchema = new dev.langchain4j.model.chat.request.json.JsonSchema.Builder()
+        .name(StringUtils.removeEnd(resource, ".json"))
+        .rootElement(nativeSchema)
+        .build();
+    return ResponseFormat.builder()
+        .type(ResponseFormatType.JSON)
+        .jsonSchema(jsonSchema)
         .build();
   }
 
