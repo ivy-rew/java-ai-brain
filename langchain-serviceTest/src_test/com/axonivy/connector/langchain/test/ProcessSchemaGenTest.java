@@ -7,6 +7,7 @@ import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +27,7 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.request.ChatRequest.Builder;
 import dev.langchain4j.model.chat.request.ResponseFormat;
 import dev.langchain4j.model.chat.request.ResponseFormatType;
-import dev.langchain4j.model.chat.request.json.JsonNativeSchema;
+import dev.langchain4j.model.chat.request.json.JsonRawSchema;
 import dev.langchain4j.model.openai.OpenAiChatModelName;
 import dev.langchain4j.model.openai.internal.chat.JsonSchema;
 
@@ -196,6 +197,8 @@ public class ProcessSchemaGenTest {
         .logResponses(true)
         .build();
 
+    // TODO emphasize correctness; play with editing
+
     var format = nativeResponsePR("proc-inline-full.json");
     var writeMailProcess = processGeneration("write a soap process, that returns product names of our ERP database")
         .responseFormat(format)
@@ -248,9 +251,9 @@ public class ProcessSchemaGenTest {
 
   private ResponseFormat nativeResponsePR(String resource) {
     var jsonNode = SchemaLoader.readSchema(resource);
-    JsonNativeSchema nativeSchema = new JsonNativeSchema.Builder().schema(jsonNode).build();
+    JsonRawSchema nativeSchema = JsonRawSchema.from(jsonNode.toString());
     var jsonSchema = new dev.langchain4j.model.chat.request.json.JsonSchema.Builder()
-        .name(StringUtils.removeEnd(resource, ".json"))
+        .name(Strings.CS.removeEnd(resource, ".json"))
         .rootElement(nativeSchema)
         .build();
     return ResponseFormat.builder()
