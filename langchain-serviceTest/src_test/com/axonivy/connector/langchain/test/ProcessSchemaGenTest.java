@@ -2,6 +2,10 @@ package com.axonivy.connector.langchain.test;
 
 import static dev.langchain4j.model.chat.Capability.RESPONSE_FORMAT_JSON_SCHEMA;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
@@ -19,6 +23,7 @@ import com.axonivy.connector.langchain.schema.OpenAiSchemaModel;
 import com.axonivy.connector.langchain.schema.SchemaLoader;
 import com.fasterxml.jackson.databind.JsonNode;
 
+import ch.ivyteam.ivy.application.IProcessModelVersion;
 import ch.ivyteam.ivy.environment.IvyTest;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -28,6 +33,7 @@ import dev.langchain4j.model.chat.request.ChatRequest.Builder;
 import dev.langchain4j.model.chat.request.ResponseFormat;
 import dev.langchain4j.model.chat.request.ResponseFormatType;
 import dev.langchain4j.model.chat.request.json.JsonRawSchema;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModelName;
 import dev.langchain4j.model.openai.internal.chat.JsonSchema;
 
@@ -170,13 +176,7 @@ public class ProcessSchemaGenTest {
 
   @Test
   void askOpenAi_gpt41mini_inlineFull() {
-    var model = new AiBrain().buildModel()
-        .supportedCapabilities(RESPONSE_FORMAT_JSON_SCHEMA)
-        .modelName(OpenAiChatModelName.GPT_4_1_MINI)
-        .strictJsonSchema(false)
-        .logRequests(true)
-        .logResponses(true)
-        .build();
+    var model = strictSchemaOpenAi();
 
     var lc4jSchema = processSchema("proc-inline-full.json");
     var writeMailProcess = processGeneration("write a soap process, that returns product names of our ERP database")
@@ -189,26 +189,60 @@ public class ProcessSchemaGenTest {
 
   @Test
   void askOpenAi_native120api_gpt41mini_inlineFull() {
-    var model = new AiBrain().buildModel()
+    var model = strictSchemaOpenAi();
+    // TODO emphasize correctness; play with editing
+    var json = generateProcess(model, "write a soap process, that returns product names of our ERP database");
+    System.out.println(json.toPrettyString());
+  }
+
+  @Test
+  void askOpenAi_native120api_gpt41mini_inlineFull_mail() {
+    var model = strictSchemaOpenAi();
+    // TODO emphasize correctness; play with editing
+    var json = generateProcess(model,
+        "add an email element, telling rolf@axonivy.com that we got the lead!");
+    System.out.println(json.toPrettyString());
+  }
+
+  @Test
+  void askOpenAi_native120api_gpt41mini_inlineFull_multiElement() throws IOException {
+
+    var model = strictSchemaOpenAi();
+    // TODO emphasize correctness; play with editing
+    var json = generateProcess(model,
+        """
+          start the process based on a signal, referencing a slack-message from a new customer
+          add an email element, telling rolf@axonivy.com that we got a new lead!
+          use an alternative gateway, if the predicted license cost is higher than 100K dollars, create a task for marcel with high priority otherwise simply end the process.
+          """);
+    System.out.println(json.toPrettyString());
+
+    String where = IProcessModelVersion.current().getProjectDirectory();
+    System.out.println(where);
+    Path testProject = Path.of(where);// .getParent().resolve("langchain-service");
+    Path leadExample = testProject.resolve("Processes").resolve("Lead.p.json");
+    Files.writeString(leadExample, json.toPrettyString(), StandardOpenOption.WRITE);
+  }
+
+  private OpenAiChatModel strictSchemaOpenAi() {
+    return new AiBrain().buildModel()
         .supportedCapabilities(RESPONSE_FORMAT_JSON_SCHEMA)
         .modelName(OpenAiChatModelName.GPT_4_1_MINI)
         .strictJsonSchema(false)
         .logRequests(true)
         .logResponses(true)
         .build();
+  }
 
-    // TODO emphasize correctness; play with editing
-
+  private JsonNode generateProcess(OpenAiChatModel model, String instruction) {
     var format = nativeResponsePR("proc-inline-full.json");
-    var writeMailProcess = processGeneration("write a soap process, that returns product names of our ERP database")
+    var writeMailProcess = processGeneration(instruction)
         .responseFormat(format)
         .build();
 
     var out = model.chat(writeMailProcess);
     String rawJson = out.aiMessage().text();
-    var json = Json.fromJson(rawJson, JsonNode.class);
-
-    System.out.println(json.toPrettyString());
+    return Json.fromJson(rawJson, JsonNode.class);
   }
 
   @Test
@@ -243,7 +277,10 @@ public class ProcessSchemaGenTest {
       omit as many defaults as possible, but at any rate produce the required values.
       Generate the 'data' as java qualified name.
       For element ID's create unique instances, starting from f1.
-      Draw elements as graph.""");
+      Draw elements as graph.
+      Do not set any visual attributes on element, except the position 'at'.
+      Set the root process 'id' out of 16 random uppercase letters or numbers.
+      """);
 
     return ChatRequest.builder()
         .messages(processHints, new UserMessage(msg));

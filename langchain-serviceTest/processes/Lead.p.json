@@ -1,0 +1,110 @@
+{
+  "$schema" : "https://json-schema.axonivy.com/process/12.0.0/process.json",
+  "id" : "198E7CC8C9B6AA2E",
+   "kind" : "NORMAL",
+  "config" : {
+    "data" : "com.example.process.LeadProcess"
+  },
+  "elements" : [ {
+    "id" : "f1",
+    "type" : "SignalStartEvent",
+    "name" : "Start on Slack Message",
+    "config" : {
+      "signalCode" : "slack-message-new-customer"
+    },
+    "visual" : {
+      "at" : {
+        "x" : 100,
+        "y" : 100
+      }
+    },
+    "connect" : [ {
+      "id" : "c1",
+      "to" : "f2"
+    } ]
+  }, {
+    "id" : "f2",
+    "type" : "EMail",
+    "name" : "Notify Rolf about new lead",
+    "config" : {
+      "headers" : {
+        "to" : "rolf@axonivy.com",
+        "subject" : "New Lead Notification"
+      },
+      "message" : {
+        "body" : "We got a new lead!",
+        "contentType" : "text/plain"
+      }
+    },
+    "visual" : {
+      "at" : {
+        "x" : 300,
+        "y" : 100
+      }
+    },
+    "connect" : [ {
+      "id" : "c2",
+      "to" : "f3"
+    } ]
+  }, {
+    "id" : "f3",
+    "type" : "Alternative",
+    "name" : "Check License Cost",
+    "config" : { },
+    "visual" : {
+      "at" : {
+        "x" : 500,
+        "y" : 100
+      }
+    },
+    "connect" : [ {
+      "id" : "c3",
+      "condition" : "predictedLicenseCost > 100000",
+      "to" : "f4"
+    }, {
+      "id" : "c4",
+      "condition" : "predictedLicenseCost <= 100000",
+      "to" : "f5"
+    } ]
+  }, {
+    "id" : "f4",
+    "type" : "UserTask",
+    "name" : "Task for Marcel",
+    "config" : {
+      "task" : {
+        "priority" : "HIGH",
+        "assignee" : "marcel"
+      }
+    },
+    "visual" : {
+      "at" : {
+        "x" : 700,
+        "y" : 50
+      }
+    },
+    "connect" : [ {
+      "id" : "c5",
+      "to" : "f6"
+    } ]
+  }, {
+    "id" : "f5",
+    "type" : "TaskEnd",
+    "name" : "End Process",
+    "visual" : {
+      "at" : {
+        "x" : 700,
+        "y" : 150
+      }
+    }
+  }, {
+    "id" : "f6",
+    "type" : "TaskEnd",
+    "name" : "End Process",
+    "visual" : {
+      "at" : {
+        "x" : 900,
+        "y" : 50
+      }
+    }
+  } ]
+}
